@@ -1,0 +1,95 @@
+{
+  "name": "CASPIAN 01 - Lead Intake and Qualification (Starter)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "caspian-lead-intake",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "caspian-webhook-lead",
+      "name": "Receive Lead (Webhook)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -600,
+        0
+      ],
+      "webhookId": "caspian-lead-intake"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\\nconst text = v => (v ?? '').toString().trim();\\nconst lead = {\\n  company_name: text(body.company_name),\\n  company_type: text(body.company_type || 'نامشخص'),\\n  contact_name: text(body.contact_name),\\n  job_title: text(body.job_title),\\n  phone: text(body.phone),\\n  email: text(body.email).toLowerCase(),\\n  city: text(body.city),\\n  province: text(body.province),\\n  lead_source: text(body.lead_source || 'webhook'),\\n  project_type: text(body.project_type),\\n  estimated_units: Number(body.estimated_units || 0),\\n  project_stage: text(body.project_stage),\\n  need_description: text(body.need_description),\\n  consent_status: text(body.consent_status || 'unknown'),\\n  consent_source: text(body.consent_source),\\n  created_at: new Date().toISOString(),\\n  lead_status: 'new'\\n};\\nlet score = 0;\\nif (lead.company_name) score += 10;\\nif (lead.phone || lead.email) score += 15;\\nif (['انبوه‌ساز','انبوه ساز','سازنده','پیمانکار','شرکت نصب'].includes(lead.company_type)) score += 20;\\nif (lead.project_type) score += 10;\\nif (lead.estimated_units >= 2) score += 10;\\nif (lead.project_stage && !['نامشخص',''].includes(lead.project_stage)) score += 10;\\nif (lead.need_description) score += 5;\\nif (lead.consent_status === 'yes' || lead.consent_status === 'documented') score += 10;\\nlead.lead_score = Math.min(score,100);\\nlead.priority = lead.lead_score >= 60 ? 'high' : lead.lead_score >= 35 ? 'medium' : 'low';\\nlead.validation_errors = [];\\nif (!lead.company_name) lead.validation_errors.push('company_name_missing');\\nif (!lead.phone && !lead.email) lead.validation_errors.push('contact_channel_missing');\\nlead.ready_for_outreach = lead.validation_errors.length === 0 && ['yes','documented'].includes(lead.consent_status);\\nreturn [{json:lead}];"
+      },
+      "id": "caspian-score-code",
+      "name": "Normalize and Score Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({received: true, lead_id: $json.lead_id || null, lead_score: $json.lead_score, priority: $json.priority, ready_for_outreach: $json.ready_for_outreach, validation_errors: $json.validation_errors, lead: $json}) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "caspian-response",
+      "name": "Return Lead Assessment",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Receive Lead (Webhook)": {
+      "main": [
+        [
+          {
+            "node": "Normalize and Score Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize and Score Lead": {
+      "main": [
+        [
+          {
+            "node": "Return Lead Assessment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "versionId": "caspian-v1-lead-intake",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "Caspian"
+    },
+    {
+      "name": "Marketing"
+    }
+  ]
+}
